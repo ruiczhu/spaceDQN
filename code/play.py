@@ -24,7 +24,7 @@ def play_game():
     agent.load(args.model)
     agent.epsilon = 0  # 在测试时使用较小的随机探索
     
-    fixed_dt = 1/60  # 改为1/60，使移动更平滑
+    fixed_dt = 1/50  # 改为1/60，使移动更平滑
     clock = pygame.time.Clock()  # 添加时钟对象控制帧率
     
     for episode in range(args.episodes):

@@ -62,7 +62,7 @@ def train_agent():
     # 更新状态空间大小 (5个基础状态 + 10个陨石各3个状态 = 35)
     agent = DQNAgent(state_size=35, action_size=len(Action))
     batch_size = 64
-    fixed_dt = 1/60
+    fixed_dt = 1/50
     
     # 优化的预填充过程
     print("预填充经验回放缓冲区...")

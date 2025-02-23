@@ -33,7 +33,7 @@ class DQNAgent:
         self.epsilon_min = 0.05       # 提高最小探索率
         self.epsilon_decay = 0.997    # 减缓衰减速度
         self.episode_count = 0        # 添加 episode 计数器
-        self.learning_rate = 0.0005  # 降低学习率
+        self.learning_rate = 0.001
         self.target_update_frequency = 10  # 每10次更新一次目标网络
         self.update_counter = 0
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
