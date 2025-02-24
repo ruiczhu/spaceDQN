@@ -104,6 +104,7 @@ class Game:
         self.current_reward = 0
         self.cumulative_reward = 0
         self.survival_time = 0
+        self.target_reached = False  # 新增：是否达到目标的标志
 
         # 初始化精灵组
         self.all_sprites = pygame.sprite.Group()
@@ -135,6 +136,7 @@ class Game:
         self.cumulative_reward = 0
         self.survival_time = 0
         self.create_player(ai_controlled=True)
+        self.target_reached = False
         return self.player
 
     def update(self, dt):
@@ -147,16 +149,24 @@ class Game:
         # 更新所有精灵
         self.all_sprites.update(dt)
 
-        # 如果玩家移动了，扣除移动成本
+        # 检查玩家是否移动
         new_pos = pygame.Vector2(self.player.rect.center)
         if (round(new_pos.x) != round(old_pos.x)) or (round(new_pos.y) != round(old_pos.y)):
             self.current_reward += MOVEMENT_REWARD
+        else:
+            # 如果玩家没有移动，添加惩罚
+            self.current_reward += NO_MOVEMENT_PENALTY * dt  # 根据时间步长调整惩罚
 
         game_continue = self.handle_collisions()
 
         # 添加基础生存奖励
         self.current_reward += SURVIVAL_REWARD * dt  # 根据时间步长调整奖励
         self.cumulative_reward += self.current_reward
+
+        # 检查是否达到目标奖励
+        if self.cumulative_reward >= TARGET_REWARD:
+            self.target_reached = True
+            return False  # 达到目标时结束游戏
 
         return game_continue
 
@@ -169,7 +179,6 @@ class Game:
             self.current_reward += METEOR_HIT_PENALTY
             AnimatedExplosion(self.resources, self.player.rect.center, self.all_sprites)
             if self.player.lives <= 0:
-                self.current_reward += GAME_OVER_PENALTY
                 return False
 
         # 检查激光是否击中陨石
@@ -262,10 +271,10 @@ class Player(pygame.sprite.Sprite):
         # mask
         self.mask = pygame.mask.from_surface(self.image)
 
-        self.lives = 3
+        self.lives = 2
         self.is_invulnerable = False
         self.invulnerable_timer = 0
-        self.invulnerable_duration = 2000  # 2 seconds of invulnerability after hit
+        self.invulnerable_duration = 1000  # 2 seconds of invulnerability after hit
 
         self.ai_controlled = False
         self.last_action = Action.NONE
@@ -535,12 +544,13 @@ CUMULATIVE_REWARD = 0
 SURVIVAL_TIME = 0
 
 
-SURVIVAL_REWARD = 0.05  # 每帧生存奖励
-MOVEMENT_REWARD = 0.1  # 移动奖励
+SURVIVAL_REWARD = 0.01  # 每帧生存奖励
+MOVEMENT_REWARD = 0.03  # 移动奖励
 SHOOT_REWARD = 5.0     # 射击奖励
-METEOR_HIT_PENALTY = -10.0
-GAME_OVER_PENALTY = -50.0
-METEOR_DESTROY_REWARD = 10.0
+NO_MOVEMENT_PENALTY = -0.4  # 不移动惩罚（新增）
+METEOR_HIT_PENALTY = -30.0
+METEOR_DESTROY_REWARD = 5.0
+TARGET_REWARD = 200.0  # 新增：目标奖励阈值
 
 def main_game_loop():
     """人类控制的主游戏循环"""

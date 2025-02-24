@@ -33,7 +33,7 @@ class DQNAgent:
         self.epsilon_min = 0.05       # 提高最小探索率
         self.epsilon_decay = 0.997    # 减缓衰减速度
         self.episode_count = 0        # 添加 episode 计数器
-        self.learning_rate = 0.001
+        self.learning_rate = 0.0005  # 降低学习率
         self.target_update_frequency = 10  # 每10次更新一次目标网络
         self.update_counter = 0
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -115,11 +115,6 @@ class DQNAgent:
         self.model.load_state_dict(torch.load(name))
         self.model.eval()
 
-    def reset_epsilon(self):
-        """重置epsilon到初始值和episode计数"""
-        self.epsilon = self.initial_epsilon
-        self.episode_count = 0
-
     def update_epsilon(self):
         """仅在 episode 结束时调用此方法"""
         if self.epsilon > self.epsilon_min:
@@ -128,3 +123,8 @@ class DQNAgent:
                 self.initial_epsilon * (self.epsilon_decay ** self.episode_count)
             )
         self.episode_count += 1
+
+    def reset_epsilon(self):
+        """重置epsilon到初始值和episode计数"""
+        self.epsilon = self.initial_epsilon
+        self.episode_count = 0

@@ -1,6 +1,6 @@
 from random import randint
 import random
-from main import Game, Action, ResourceManager, Meteor
+from main import TARGET_REWARD, Game, Action, ResourceManager, Meteor
 import pygame
 from dqn_agent import DQNAgent
 import numpy as np
@@ -64,53 +64,75 @@ def train_agent():
     batch_size = 64
     fixed_dt = 1/50
     
-    # 优化的预填充过程
-    print("预填充经验回放缓冲区...")
-    min_samples = batch_size * 2
-    max_attempts = 10
+    # 增加预填充数量到batch_size的20倍
+    min_samples = batch_size * 20
+    print(f"预填充经验回放缓冲区 (目标: {min_samples} 样本)...")
     
-    print("预填充经验回放缓冲区...")
-    while len(agent.memory) < min_samples:
-        attempts = 0
+    attempts_without_reset = 0
+    total_samples = 0
+    meteor_spawn_rate = 8  # 更频繁的陨石生成
+    max_steps_per_episode = 500  # 每个预填充回合的最大步数
+    
+    while total_samples < min_samples:
         player = game.reset()
-
-        Meteor(game.resources, (randint(0, game.WINDOW_WIDTH), -100), 
-        (game.all_sprites, game.meteor_sprites))
-
         state = player.get_state()
         
-        while state is None and attempts < max_attempts:
-            player = game.reset()
-            state = player.get_state()
-            attempts += 1
-        
         if state is None:
-            print("无法获取有效状态，跳过此回合")
+            attempts_without_reset += 1
+            if attempts_without_reset > 3:  # 连续3次失败后重新初始化游戏
+                game = Game(resources, fast_mode)
+                attempts_without_reset = 0
             continue
-            
-        for _ in range(200):
-            if len(agent.memory) >= min_samples:
-                break
-                
-            action_idx = random.randrange(len(Action))
-            action = Action(action_idx)
-            player.take_action(action, fixed_dt)
-            
-            if _ % 12 == 0:
-                Meteor(game.resources, (randint(0, game.WINDOW_WIDTH), -100), 
+        
+        attempts_without_reset = 0
+        steps_in_episode = 0
+        
+        # 在每个回合开始时生成多个陨石
+        for _ in range(3):
+            Meteor(game.resources, 
+                  (randint(0, game.WINDOW_WIDTH), -100),
+                  (game.all_sprites, game.meteor_sprites))
+        
+        while steps_in_episode < max_steps_per_episode and player.lives > 0:
+            # 增加陨石生成频率
+            if steps_in_episode % meteor_spawn_rate == 0:
+                Meteor(game.resources, 
+                      (randint(0, game.WINDOW_WIDTH), -100),
                       (game.all_sprites, game.meteor_sprites))
+            
+            # 增加随机动作的多样性
+            if random.random() < 0.3:  # 30%的概率执行组合动作
+                actions = []
+                if random.random() < 0.5:
+                    actions.append(random.choice([Action.LEFT, Action.RIGHT]))
+                if random.random() < 0.5:
+                    actions.append(random.choice([Action.UP, Action.DOWN]))
+                if random.random() < 0.3:
+                    actions.append(Action.SHOOT)
+                
+                for action in actions:
+                    player.take_action(action, fixed_dt)
+            else:
+                action = Action(random.randrange(len(Action)))
+                player.take_action(action, fixed_dt)
             
             reward = game.update(fixed_dt)
             next_state = player.get_state()
             
             if next_state is not None:
-                agent.remember(list(state.values()), action_idx, reward, 
-                             list(next_state.values()), player.lives <= 0, 
+                total_samples += 1
+                agent.remember(list(state.values()), action.value, reward, 
+                             list(next_state.values()), player.lives <= 0,
                              training=False)
                 state = next_state
-        
-        print(f"\r预填充进度: {len(agent.memory)}/{min_samples}", end="")
+                
+                if total_samples % 100 == 0:
+                    print(f"\r预填充进度: {total_samples}/{min_samples} "
+                          f"({(total_samples/min_samples)*100:.1f}%)", end="")
+            
+            steps_in_episode += 1
     
+    print("\n预填充完成!")
     agent.reset_epsilon()
     
     print("\n开始训练...")
@@ -133,10 +155,11 @@ def train_agent():
         game.cumulative_reward = 0
         episode_losses = []
         
-        while step < 1000 and player.lives > 0:
+        # 移除 step < 2000 的限制，只保留生命值和目标达成检查
+        while player.lives > 0 and not game.target_reached:
             dt = fixed_dt
             
-            if step % 24 == 0:
+            if step % 48 == 0:
                 Meteor(game.resources, (randint(0, game.WINDOW_WIDTH), -100), 
                       (game.all_sprites, game.meteor_sprites))
             
@@ -151,7 +174,8 @@ def train_agent():
             next_state = player.get_state()
             
             if next_state is not None:
-                done = player.lives <= 0
+                # 更新完成条件：生命值为0或达到目标奖励
+                done = player.lives <= 0 or game.target_reached
                 agent.remember(state_values, action_idx, reward, 
                              list(next_state.values()), done)
                 
@@ -169,12 +193,23 @@ def train_agent():
                     (f'Memory: {len(agent.memory)}/{agent.min_experiences}', (240, 240, 240))
                 ]
                 
+                info_texts.extend([
+                    (f'Target Progress: {(game.cumulative_reward/TARGET_REWARD)*100:.1f}%', 
+                     (240, 240, 240)),
+                    (f'Target Reached: {game.target_reached}', 
+                     (0, 255, 0) if game.target_reached else (240, 240, 240))
+                ])
+                
                 for i, (text, color) in enumerate(info_texts):
                     surf = game.resources.fonts['main'].render(text, True, color)
                     rect = surf.get_rect(topright=(game.WINDOW_WIDTH - 20, 80 + i * 40))
                     game.display_surface.blit(surf, rect)
                 
                 pygame.display.flip()
+            
+            if game.target_reached:
+                print(f"\nTarget reward reached in episode {episode+1}!")
+                break
             
             step += 1
         

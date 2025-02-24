@@ -1,7 +1,7 @@
 import argparse
 import pygame
 from random import randint
-from main import Game, Action, ResourceManager, Meteor
+from main import Game, Action, ResourceManager, Meteor, TARGET_REWARD
 from dqn_agent import DQNAgent
 
 def parse_args():
@@ -19,29 +19,28 @@ def play_game():
     resources = ResourceManager(False)
     game = Game(resources, False)
     
-    # 更新状态空间大小以匹配训练时的设置 (5个基础状态 + 10个陨石各3个状态)
     agent = DQNAgent(state_size=35, action_size=len(Action))
     agent.load(args.model)
-    agent.epsilon = 0  # 在测试时使用较小的随机探索
+    agent.epsilon = 0  # 在测试时禁用随机探索
     
-    fixed_dt = 1/50  # 改为1/60，使移动更平滑
-    clock = pygame.time.Clock()  # 添加时钟对象控制帧率
+    fixed_dt = 1/50
+    
+    # 记录成功次数
+    success_count = 0
+    total_rewards = []
     
     for episode in range(args.episodes):
         player = game.reset()
         step = 0
-        game.cumulative_reward = 0  # 确保每个episode开始时重置累积奖励
+        game.cumulative_reward = 0
         
-        while step < 1000 and player.lives > 0:
-            # clock.tick(60)  # 限制帧率为60FPS
+        while step < 2000 and player.lives > 0 and not game.target_reached:
             dt = fixed_dt
             
-            # 创建更多陨石以测试模型的性能
             if step % 48 == 0: 
                 Meteor(game.resources, (randint(0, game.WINDOW_WIDTH), -100), 
                         (game.all_sprites, game.meteor_sprites))
             
-            # 获取状态并执行动作
             state = player.get_state()
             if state is not None:
                 state_values = list(state.values())
@@ -49,15 +48,24 @@ def play_game():
                 action = Action(action_idx)
                 player.take_action(action, dt)
             
-            # 更新游戏状态
             reward = game.update(dt)
             
-            # 渲染增强的状态信息
             game.render()
             info_texts = [
                 (f'Episode: {episode+1}/{args.episodes}', (255, 255, 0)),
                 (f'Step: {step}', (240, 240, 240)),
+                (f'Target Progress: {(game.cumulative_reward/TARGET_REWARD)*100:.1f}%', 
+                 (240, 240, 240)),
+                (f'Success Rate: {(success_count/max(1, episode))*100:.1f}%', 
+                 (240, 240, 240)),
+                (f'Lives: {player.lives}', (240, 240, 240)),
             ]
+            
+            # 如果达到目标，显示成功信息
+            if game.target_reached:
+                info_texts.append(
+                    ('TARGET REACHED!', (0, 255, 0))
+                )
             
             for i, (text, color) in enumerate(info_texts):
                 surf = game.resources.fonts['main'].render(text, True, color)
@@ -66,7 +74,6 @@ def play_game():
             
             pygame.display.flip()
             
-            # 处理退出事件
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     pygame.quit()
@@ -74,11 +81,27 @@ def play_game():
             
             step += 1
         
+        # 更新统计信息
+        if game.target_reached:
+            success_count += 1
+        
+        total_rewards.append(game.cumulative_reward)
+        avg_reward = sum(total_rewards) / len(total_rewards)
+        
         print(f"Episode {episode+1}: "
-              f"Score: {game.score}, "
-              f"Steps: {step}, "
-              f"Survival Time: {game.survival_time:.1f}s, "
-              f"Final Reward: {game.cumulative_reward:.2f}")
+              f"{'SUCCESS!' if game.target_reached else 'FAILED'} | "
+              f"Score: {game.score} | "
+              f"Steps: {step} | "
+              f"Survival Time: {game.survival_time:.1f}s | "
+              f"Final Reward: {game.cumulative_reward:.2f} | "
+              f"Avg Reward: {avg_reward:.2f}")
+    
+    # 显示最终统计信息
+    final_success_rate = (success_count / args.episodes) * 100
+    final_avg_reward = sum(total_rewards) / len(total_rewards)
+    print("\nFinal Statistics:")
+    print(f"Success Rate: {final_success_rate:.1f}%")
+    print(f"Average Reward: {final_avg_reward:.2f}")
     
     pygame.quit()
 
