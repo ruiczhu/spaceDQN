@@ -10,7 +10,19 @@ class Action(Enum):
     RIGHT = 2
     UP = 3
     DOWN = 4
-    SHOOT = 5
+    UP_LEFT = 5
+    UP_RIGHT = 6
+    DOWN_LEFT = 7
+    DOWN_RIGHT = 8
+    SHOOT = 9
+    SHOOT_LEFT = 10
+    SHOOT_RIGHT = 11
+    SHOOT_UP = 12
+    SHOOT_DOWN = 13
+    SHOOT_UP_LEFT = 14
+    SHOOT_UP_RIGHT = 15
+    SHOOT_DOWN_LEFT = 16
+    SHOOT_DOWN_RIGHT = 17
 
 class ResourceManager:
     @staticmethod
@@ -437,27 +449,27 @@ class Player(pygame.sprite.Sprite):
         # 重置方向
         self.direction.x = 0
         self.direction.y = 0
+        should_shoot = False
 
-        if action == Action.LEFT:
+        # 处理移动部分
+        if action in [Action.LEFT, Action.UP_LEFT, Action.DOWN_LEFT, 
+                     Action.SHOOT_LEFT, Action.SHOOT_UP_LEFT, Action.SHOOT_DOWN_LEFT]:
             self.direction.x = -1
-        elif action == Action.RIGHT:
+        if action in [Action.RIGHT, Action.UP_RIGHT, Action.DOWN_RIGHT,
+                     Action.SHOOT_RIGHT, Action.SHOOT_UP_RIGHT, Action.SHOOT_DOWN_RIGHT]:
             self.direction.x = 1
-        elif action == Action.UP:
+        if action in [Action.UP, Action.UP_LEFT, Action.UP_RIGHT,
+                     Action.SHOOT_UP, Action.SHOOT_UP_LEFT, Action.SHOOT_UP_RIGHT]:
             self.direction.y = -1
-        elif action == Action.DOWN:
+        if action in [Action.DOWN, Action.DOWN_LEFT, Action.DOWN_RIGHT,
+                     Action.SHOOT_DOWN, Action.SHOOT_DOWN_LEFT, Action.SHOOT_DOWN_RIGHT]:
             self.direction.y = 1
-        elif action == Action.SHOOT and self.can_shoot:
-            Laser(
-                self.resources,
-                self.rect.midtop,
-                (self.game.all_sprites, self.game.laser_sprites)
-            )
-            self.can_shoot = False
-            self.laser_shoot_time = pygame.time.get_ticks()
-            if hasattr(self.resources, 'sounds'):
-                self.resources.play_sound('laser')
-            # 添加射击奖励
-            self.game.current_reward += SHOOT_REWARD
+
+        # 处理射击部分
+        if action in [Action.SHOOT, Action.SHOOT_LEFT, Action.SHOOT_RIGHT,
+                     Action.SHOOT_UP, Action.SHOOT_DOWN, Action.SHOOT_UP_LEFT,
+                     Action.SHOOT_UP_RIGHT, Action.SHOOT_DOWN_LEFT, Action.SHOOT_DOWN_RIGHT]:
+            should_shoot = True
 
         if self.direction.length() > 0:
             self.direction = self.direction.normalize()
@@ -471,6 +483,19 @@ class Player(pygame.sprite.Sprite):
 
         self.rect.centerx = new_x
         self.rect.centery = new_y
+
+        if should_shoot and self.can_shoot:
+            Laser(
+                self.resources,
+                self.rect.midtop,
+                (self.game.all_sprites, self.game.laser_sprites)
+            )
+            self.can_shoot = False
+            self.laser_shoot_time = pygame.time.get_ticks()
+            if hasattr(self.resources, 'sounds'):
+                self.resources.play_sound('laser')
+            # 添加射击奖励
+            self.game.current_reward += SHOOT_REWARD
 
     def check_invulnerability(self):
         """检查并更新无敌状态"""
@@ -500,51 +525,86 @@ class Player(pygame.sprite.Sprite):
     def handle_human_input(self, keys, dt):
         global CURRENT_ACTION, CURRENT_REWARD
 
-        # 更新当前动作和玩家最后的动作
-        if keys[pygame.K_SPACE]:
-            self.last_action = Action.SHOOT
-            CURRENT_ACTION = Action.SHOOT
-        elif keys[pygame.K_LEFT]:
-            self.last_action = Action.LEFT
-            CURRENT_ACTION = Action.LEFT
-        elif keys[pygame.K_RIGHT]:
-            self.last_action = Action.RIGHT
-            CURRENT_ACTION = Action.RIGHT
-        elif keys[pygame.K_UP]:
-            self.last_action = Action.UP
-            CURRENT_ACTION = Action.UP
-        elif keys[pygame.K_DOWN]:
-            self.last_action = Action.DOWN
-            CURRENT_ACTION = Action.DOWN
-        else:
-            self.last_action = Action.NONE
-            CURRENT_ACTION = Action.NONE
+        # 组合动作检测
+        up = keys[pygame.K_UP]
+        down = keys[pygame.K_DOWN]
+        left = keys[pygame.K_LEFT]
+        right = keys[pygame.K_RIGHT]
+        shooting = keys[pygame.K_SPACE]
 
-        # 移动逻辑
-        old_x, old_y = self.rect.centerx, self.rect.centery
-        self.direction.x = int(keys[pygame.K_RIGHT]) - int(keys[pygame.K_LEFT])
-        self.direction.y = int(keys[pygame.K_DOWN]) - int(keys[pygame.K_UP])
+        # 确定动作类型
+        if shooting:
+            if up:
+                if left:
+                    self.last_action = Action.SHOOT_UP_LEFT
+                elif right:
+                    self.last_action = Action.SHOOT_UP_RIGHT
+                else:
+                    self.last_action = Action.SHOOT_UP
+            elif down:
+                if left:
+                    self.last_action = Action.SHOOT_DOWN_LEFT
+                elif right:
+                    self.last_action = Action.SHOOT_DOWN_RIGHT
+                else:
+                    self.last_action = Action.SHOOT_DOWN
+            elif left:
+                self.last_action = Action.SHOOT_LEFT
+            elif right:
+                self.last_action = Action.SHOOT_RIGHT
+            else:
+                self.last_action = Action.SHOOT
+        else:
+            if up:
+                if left:
+                    self.last_action = Action.UP_LEFT
+                elif right:
+                    self.last_action = Action.UP_RIGHT
+                else:
+                    self.last_action = Action.UP
+            elif down:
+                if left:
+                    self.last_action = Action.DOWN_LEFT
+                elif right:
+                    self.last_action = Action.DOWN_RIGHT
+                else:
+                    self.last_action = Action.DOWN
+            elif left:
+                self.last_action = Action.LEFT
+            elif right:
+                self.last_action = Action.RIGHT
+            else:
+                self.last_action = Action.NONE
+
+        CURRENT_ACTION = self.last_action
+
+        # 转换为向量移动
+        self.direction = pygame.Vector2()
+        if left: self.direction.x -= 1
+        if right: self.direction.x += 1
+        if up: self.direction.y -= 1
+        if down: self.direction.y += 1
 
         if self.direction.length() > 0:
             self.direction = self.direction.normalize()
 
-        new_x = old_x + self.direction.x * self.speed * dt
-        new_y = old_y + self.direction.y * self.speed * dt
+        # 更新位置
+        new_x = self.rect.centerx + self.direction.x * self.speed * dt
+        new_y = self.rect.centery + self.direction.y * self.speed * dt
 
         # 边界检查
         new_x = max(self.rect.width / 2, min(WINDOW_WIDTH - self.rect.width / 2, new_x))
         new_y = max(self.rect.height / 2, min(WINDOW_HEIGHT - self.rect.height / 2, new_y))
 
         # 如果玩家确实移动了，扣除移动成本
-        if (round(new_x) != round(old_x)) or (round(new_y) != round(old_y)):
+        if (round(new_x) != round(self.rect.centerx)) or (round(new_y) != round(self.rect.centery)):
             CURRENT_REWARD += MOVEMENT_REWARD
 
         self.rect.centerx = new_x
         self.rect.centery = new_y
 
-        # 射击逻辑 (event-based is more accurate for "just pressed," but we simulate here)
-        if keys[pygame.K_SPACE] and self.can_shoot:
-            CURRENT_ACTION = Action.SHOOT
+        # 射击处理
+        if shooting and self.can_shoot:
             Laser(
                 self.resources,
                 self.rect.midtop,

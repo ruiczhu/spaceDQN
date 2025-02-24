@@ -8,15 +8,15 @@ import random
 class DQN(nn.Module):
     def __init__(self, input_size, output_size):
         super(DQN, self).__init__()
-        # 增加网络容量以处理更大的状态空间
+        # 增加网络容量以处理更大的动作空间
         self.network = nn.Sequential(
-            nn.Linear(input_size, 256),
+            nn.Linear(input_size, 512),  # 增加第一层神经元
+            nn.ReLU(),
+            nn.Linear(512, 256),
             nn.ReLU(),
             nn.Linear(256, 128),
             nn.ReLU(),
-            nn.Linear(128, 64),
-            nn.ReLU(),
-            nn.Linear(64, output_size)
+            nn.Linear(128, output_size)
         )
     
     def forward(self, x):
