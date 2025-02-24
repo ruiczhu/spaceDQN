@@ -60,8 +60,9 @@ def train_agent():
     resources = ResourceManager(fast_mode, enable_sound=False)
     game = Game(resources, fast_mode)
     
-    # 更新状态空间大小 (5个基础状态 + 10个陨石各3个状态 = 35)
-    agent = DQNAgent(state_size=35, action_size=len(Action))
+    # 更新为正确的状态空间大小
+    state_size = 80  # 11(基础) + 60(陨石) + 9(激光)
+    agent = DQNAgent(state_size=state_size, action_size=len(Action))
     batch_size = 64
     fixed_dt = 1/50
     
@@ -101,7 +102,8 @@ def train_agent():
                       (randint(0, game.WINDOW_WIDTH), -100),
                       (game.all_sprites, game.meteor_sprites))
             
-            # 增加随机动作的多样性
+            # 修复：先选择动作
+            current_action = None
             if random.random() < 0.5:
                 actions = []
                 if random.random() < 0.5:
@@ -112,22 +114,23 @@ def train_agent():
                     actions.append(Action.SHOOT)
                 
                 for action in actions:
+                    current_action = action  # 记录最后一个动作
                     player.take_action(action, fixed_dt)
             else:
-                action = Action(random.randrange(len(Action)))
-                player.take_action(action, fixed_dt)
+                current_action = Action(random.randrange(len(Action)))
+                player.take_action(current_action, fixed_dt)
                 
             # 定期强制移动
             if steps_in_episode % 50 == 0:
-                forced_action = random.choice([Action.LEFT, Action.RIGHT, Action.UP, Action.DOWN])
-                player.take_action(forced_action, fixed_dt)
+                current_action = random.choice([Action.LEFT, Action.RIGHT, Action.UP, Action.DOWN])
+                player.take_action(current_action, fixed_dt)
             
             reward = game.update(fixed_dt)
             next_state = player.get_state()
             
-            if next_state is not None:
+            if next_state is not None and current_action is not None:  # 确保动作已定义
                 total_samples += 1
-                agent.remember(list(state.values()), action.value, reward, 
+                agent.remember(list(state.values()), current_action.value, reward, 
                              list(next_state.values()), player.lives <= 0,
                              training=False)
                 state = next_state

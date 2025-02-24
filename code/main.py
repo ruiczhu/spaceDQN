@@ -321,6 +321,11 @@ class Player(pygame.sprite.Sprite):
         self.last_action = Action.NONE
         self.game = None  # 将在创建时设置
 
+        # 添加速度和方向追踪
+        self.velocity = pygame.Vector2()
+        self.last_velocity = pygame.Vector2()
+        self.last_pos = pygame.Vector2(self.rect.center)
+
     def laser_timer(self):
         if not self.can_shoot:
             current_time = pygame.time.get_ticks()
@@ -336,58 +341,88 @@ class Player(pygame.sprite.Sprite):
         return False
 
     def get_state(self):
-        """获取游戏状态，包括10个最近的陨石信息"""
+        """获取游戏状态，包含更多环境信息"""
         if not self.game:
             return None
 
-        # 计算所有陨石的距离
+        # 基础状态信息
+        state = {
+            'player_x': self.rect.centerx / self.game.WINDOW_WIDTH,
+            'player_y': self.rect.centery / self.game.WINDOW_HEIGHT,
+            'player_vx': self.velocity.x / self.speed,  # 归一化速度
+            'player_vy': self.velocity.y / self.speed,
+            'player_direction_x': self.direction.x,
+            'player_direction_y': self.direction.y,
+            'lives': self.lives / 3.0,
+            'can_shoot': float(self.can_shoot),
+            'is_invulnerable': float(self.is_invulnerable),
+            'laser_cooldown': (pygame.time.get_ticks() - self.laser_shoot_time) / self.cooldown_duration,
+            'active_lasers': len(self.game.laser_sprites) / 10.0,  # 归一化激光数量
+        }
+
+        # 收集陨石信息
         meteor_distances = []
         for meteor in self.game.meteor_sprites:
-            dist = (
-                (self.rect.centerx - meteor.rect.centerx) ** 2
-                + (self.rect.centery - meteor.rect.centery) ** 2
-            ) ** 0.5
-            meteor_distances.append((dist, meteor))
+            dist = pygame.Vector2(self.rect.center).distance_to(pygame.Vector2(meteor.rect.center))
+            rel_velocity = pygame.Vector2(meteor.direction) * meteor.speed
+            meteor_distances.append((dist, meteor, rel_velocity))
 
         # 按距离排序，获取最近的10个陨石
         meteor_distances.sort(key=lambda x: x[0])
         nearest_meteors = meteor_distances[:10]
 
-        # 如果陨石数量不足10个，用虚拟陨石填充（位置在屏幕外）
+        # 填充虚拟陨石
         while len(nearest_meteors) < 10:
-            nearest_meteors.append(
-                (
-                    float('inf'),
-                    type(
-                        'obj',
-                        (),
-                        {
-                            'rect': type(
-                                'obj',
-                                (),
-                                {'centerx': -100, 'centery': -100}
-                            )()
-                        }
-                    )()
-                )
-            )
+            nearest_meteors.append((float('inf'), None, pygame.Vector2()))
 
-        # 构建状态字典
-        state = {
-            'player_x': self.rect.centerx / self.game.WINDOW_WIDTH,
-            'player_y': self.rect.centery / self.game.WINDOW_HEIGHT,
-            'lives': self.lives / 3.0,  # 归一化生命值
-            'can_shoot': float(self.can_shoot),
-            'is_invulnerable': float(self.is_invulnerable),
-        }
+        # 添加陨石信息（包括速度和方向）
+        for i, (dist, meteor, rel_velocity) in enumerate(nearest_meteors):
+            if meteor is not None:
+                state.update({
+                    f'meteor_{i}_x': meteor.rect.centerx / self.game.WINDOW_WIDTH,
+                    f'meteor_{i}_y': meteor.rect.centery / self.game.WINDOW_HEIGHT,
+                    f'meteor_{i}_dist': min(dist / self.game.WINDOW_WIDTH, 1.0),
+                    f'meteor_{i}_vx': rel_velocity.x / 500.0,  # 归一化速度
+                    f'meteor_{i}_vy': rel_velocity.y / 500.0,
+                    f'meteor_{i}_speed': meteor.speed / 300.0,  # 归一化速度
+                })
+            else:
+                state.update({
+                    f'meteor_{i}_x': 1.0,
+                    f'meteor_{i}_y': 0.0,
+                    f'meteor_{i}_dist': 1.0,
+                    f'meteor_{i}_vx': 0.0,
+                    f'meteor_{i}_vy': 0.0,
+                    f'meteor_{i}_speed': 0.0,
+                })
 
-        # 添加10个最近陨石的位置信息
-        for i, (dist, meteor) in enumerate(nearest_meteors):
-            state.update({
-                f'meteor_{i}_x': meteor.rect.centerx / self.game.WINDOW_WIDTH,
-                f'meteor_{i}_y': meteor.rect.centery / self.game.WINDOW_HEIGHT,
-                f'meteor_{i}_dist': min(dist / self.game.WINDOW_WIDTH, 1.0)  # 归一化距离
-            })
+        # 收集最近的3个激光信息
+        laser_info = []
+        for laser in self.game.laser_sprites:
+            dist = pygame.Vector2(self.rect.center).distance_to(pygame.Vector2(laser.rect.center))
+            laser_info.append((dist, laser))
+
+        laser_info.sort(key=lambda x: x[0])
+        nearest_lasers = laser_info[:3]
+
+        # 填充虚拟激光
+        while len(nearest_lasers) < 3:
+            nearest_lasers.append((float('inf'), None))
+
+        # 添加激光信息
+        for i, (dist, laser) in enumerate(nearest_lasers):
+            if laser is not None:
+                state.update({
+                    f'laser_{i}_x': laser.rect.centerx / self.game.WINDOW_WIDTH,
+                    f'laser_{i}_y': laser.rect.centery / self.game.WINDOW_HEIGHT,
+                    f'laser_{i}_dist': min(dist / self.game.WINDOW_WIDTH, 1.0),
+                })
+            else:
+                state.update({
+                    f'laser_{i}_x': 0.0,
+                    f'laser_{i}_y': 0.0,
+                    f'laser_{i}_dist': 1.0,
+                })
 
         return state
 
@@ -452,6 +487,12 @@ class Player(pygame.sprite.Sprite):
         # 不管是AI还是人类控制，都需要处理这些状态
         self.laser_timer()
         self.check_invulnerability()
+
+        # 更新速度信息
+        current_pos = pygame.Vector2(self.rect.center)
+        self.velocity = (current_pos - self.last_pos) / dt if dt > 0 else pygame.Vector2()
+        self.last_pos = current_pos
+        self.last_velocity = self.velocity
 
     def handle_human_input(self, keys, dt):
         global CURRENT_ACTION, CURRENT_REWARD
@@ -546,6 +587,8 @@ class Meteor(pygame.sprite.Sprite):
             self.rotation_speed = randint(40, 80)
             self.rotation = 0
             self.original_surf = self.image
+
+        self.original_velocity = pygame.Vector2(self.direction) * self.speed
 
     def update(self, dt):
         self.rect.center += self.direction * self.speed * dt

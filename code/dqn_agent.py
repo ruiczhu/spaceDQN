@@ -24,7 +24,13 @@ class DQN(nn.Module):
 
 class DQNAgent:
     def __init__(self, state_size, action_size):
-        self.state_size = state_size  # 现在应该是35 (5个基础状态 + 10个陨石各3个状态)
+        # 修正实际的状态空间大小
+        # 基础状态: 11 (player_x, player_y, player_vx, player_vy, player_direction_x, 
+        #            player_direction_y, lives, can_shoot, is_invulnerable, laser_cooldown, active_lasers)
+        # 陨石信息: 10 * 6 = 60 (每个陨石 x, y, dist, vx, vy, speed)
+        # 激光信息: 3 * 3 = 9 (每个激光 x, y, dist)
+        # 总计: 11 + 60 + 9 = 80
+        self.state_size = 80  # 更新为正确的状态空间大小
         self.action_size = action_size
         self.memory = deque(maxlen=10000)  # 增大经验回放缓冲区
         self.gamma = 0.99
@@ -41,9 +47,9 @@ class DQNAgent:
         self.batch_size = 64
         self.min_experiences = 64  # 添加最小经验数量要求
 
-        # 主网络和目标网络
-        self.model = DQN(state_size, action_size).to(self.device)
-        self.target_model = DQN(state_size, action_size).to(self.device)
+        # 主网络和目标网络 - 使用正确的state_size
+        self.model = DQN(self.state_size, action_size).to(self.device)
+        self.target_model = DQN(self.state_size, action_size).to(self.device)
         self.target_model.load_state_dict(self.model.state_dict())  # 初始化目标网络
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
