@@ -34,10 +34,10 @@ def play_game():
         step = 0
         game.cumulative_reward = 0
         
-        while step < 2000 and player.lives > 0 and not game.target_reached:
+        while player.lives > 0 and not game.target_reached:  # 移除了 step < 2000 的限制
             dt = fixed_dt
             
-            if step % 48 == 0: 
+            if step % 24 == 0:  # 改为与训练时相同的陨石生成频率
                 Meteor(game.resources, (randint(0, game.WINDOW_WIDTH), -100), 
                         (game.all_sprites, game.meteor_sprites))
             
