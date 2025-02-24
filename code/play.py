@@ -58,7 +58,6 @@ def play_game():
                  (240, 240, 240)),
                 (f'Success Rate: {(success_count/max(1, episode))*100:.1f}%', 
                  (240, 240, 240)),
-                (f'Lives: {player.lives}', (240, 240, 240)),
             ]
             
             # 如果达到目标，显示成功信息
