@@ -14,19 +14,22 @@ class Action(Enum):
 
 class ResourceManager:
     @staticmethod
-    def init_display(fast_mode=True):
+    def init_display(fast_mode=True, enable_sound=False):
         pygame.init()
         if not fast_mode:
             pygame.display.set_mode((1280, 720))
         else:
             # 最小隐藏窗口
             pygame.display.set_mode((1, 1), pygame.HIDDEN)
+        if enable_sound:
+            pygame.mixer.init()
 
-    def __init__(self, fast_mode=True):
+    def __init__(self, fast_mode=True, enable_sound=False):
         self.images = {}
         self.fast_mode = fast_mode
+        self.enable_sound = enable_sound
         self.fonts = {}
-        if not fast_mode:
+        if enable_sound:
             pygame.mixer.init()
             self.sounds = {}
         self.ensure_display_initialized()
@@ -35,7 +38,7 @@ class ResourceManager:
     def ensure_display_initialized(self):
         """确保显示模块已初始化"""
         if not pygame.get_init() or not pygame.display.get_surface():
-            ResourceManager.init_display(self.fast_mode)
+            ResourceManager.init_display(self.fast_mode, self.enable_sound)
 
     def load_all(self):
         if not self.fast_mode:
@@ -51,16 +54,17 @@ class ResourceManager:
                 ]
             })
 
-            # 加载音效
-            self.sounds.update({
-                'laser': pygame.mixer.Sound(join('audio', 'laser.wav')),
-                'explosion': pygame.mixer.Sound(join('audio', 'explosion.wav')),
-                'music': pygame.mixer.Sound(join('audio', 'game_music.wav'))
-            })
+            # 只在启用声音时加载音效
+            if self.enable_sound:
+                self.sounds.update({
+                    'laser': pygame.mixer.Sound(join('audio', 'laser.wav')),
+                    'explosion': pygame.mixer.Sound(join('audio', 'explosion.wav')),
+                    'music': pygame.mixer.Sound(join('audio', 'game_music.wav'))
+                })
 
-            # 设置音量
-            self.sounds['laser'].set_volume(0.3)
-            self.sounds['music'].set_volume(0.2)
+                # 设置音量
+                self.sounds['laser'].set_volume(0.3)
+                self.sounds['music'].set_volume(0.2)
 
             # 加载字体
             self.fonts.update({
@@ -79,7 +83,7 @@ class ResourceManager:
             })
 
     def play_sound(self, sound_name):
-        if not self.fast_mode and hasattr(self, 'sounds'):
+        if self.enable_sound and hasattr(self, 'sounds'):
             self.sounds[sound_name].play()
 
 class Game:
@@ -106,11 +110,15 @@ class Game:
         self.survival_time = 0
         self.target_reached = False  # 新增：是否达到目标的标志
 
-        # 初始化精灵组
+        # 创建持久化的精灵组
         self.all_sprites = pygame.sprite.Group()
         self.meteor_sprites = pygame.sprite.Group()
         self.laser_sprites = pygame.sprite.Group()
+        self.static_sprites = pygame.sprite.Group()  # 新增：用于存储静态精灵
 
+        # 初始化静态背景
+        self.initialize_static_background()
+        
         # 创建玩家
         self.create_player()
 
@@ -118,25 +126,48 @@ class Game:
         self.meteor_event = pygame.event.custom_type()
         pygame.time.set_timer(self.meteor_event, 500)
 
-    def create_player(self, ai_controlled=False):
-        self.all_sprites.empty()
-        self.meteor_sprites.empty()
-        self.laser_sprites.empty()
-
+    def initialize_static_background(self):
+        """初始化静态背景元素，只执行一次"""
         for i in range(20):
-            Star(self.all_sprites, self.resources)
+            Star(self.static_sprites, self.resources)
+        self.all_sprites.add(self.static_sprites)
+
+    def create_player(self, ai_controlled=False):
+        """仅创建或重置玩家，不影响其他精灵"""
+        # 移除旧的玩家精灵（如果存在）
+        if hasattr(self, 'player'):
+            self.player.kill()
+        
         self.player = Player(self.all_sprites, self.resources)
         self.player.ai_controlled = ai_controlled
-        self.player.game = self  # 设置玩家的游戏引用
+        self.player.game = self
         return self.player
 
     def reset(self):
+        """优化的重置函数"""
+        # 重置游戏状态
         self.score = 0
         self.current_reward = 0
         self.cumulative_reward = 0
         self.survival_time = 0
-        self.create_player(ai_controlled=True)
         self.target_reached = False
+
+        # 清除所有陨石和激光
+        for sprite in self.meteor_sprites:
+            sprite.kill()
+        for sprite in self.laser_sprites:
+            sprite.kill()
+
+        # 重置玩家位置和状态
+        if hasattr(self, 'player'):
+            self.player.rect.center = (self.WINDOW_WIDTH / 2, self.WINDOW_HEIGHT / 2)
+            self.player.lives = 2
+            self.player.is_invulnerable = False
+            self.player.can_shoot = True
+            self.player.ai_controlled = True
+        else:
+            self.create_player(ai_controlled=True)
+
         return self.player
 
     def update(self, dt):
@@ -197,10 +228,20 @@ class Game:
         return True
 
     def render(self):
+        """优化的渲染函数"""
         if self.fast_mode:
             return
+        
         self.display_surface.fill('#3a2e3f')
-        self.all_sprites.draw(self.display_surface)
+        
+        # 先渲染静态精灵
+        self.static_sprites.draw(self.display_surface)
+        
+        # 再渲染动态精灵
+        for sprite in self.all_sprites:
+            if sprite not in self.static_sprites:
+                self.display_surface.blit(sprite.image, sprite.rect)
+        
         self.display_game_info()
         self.display_rl_info()
         pygame.display.flip()
@@ -557,8 +598,8 @@ def main_game_loop():
     global running, GAME_SCORE, CURRENT_REWARD, CUMULATIVE_REWARD, SURVIVAL_TIME
 
     # 初始化显示和资源 - 人类模式下使用完整功能
-    ResourceManager.init_display(fast_mode=False)  # 使用完整显示模式
-    resources = ResourceManager(fast_mode=False)   # 加载所有资源，包括声音
+    ResourceManager.init_display(fast_mode=False, enable_sound=True)  # 使用完整显示模式
+    resources = ResourceManager(fast_mode=False, enable_sound=True)   # 加载所有资源，包括声音
 
     # 创建游戏实例
     game = Game(resources, fast_mode=False)

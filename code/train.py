@@ -55,8 +55,9 @@ def train_agent():
     args = parse_args()
     fast_mode = not args.render
     
-    ResourceManager.init_display(fast_mode)
-    resources = ResourceManager(fast_mode)
+    # 初始化时就确定是否需要渲染
+    ResourceManager.init_display(fast_mode, enable_sound=False)
+    resources = ResourceManager(fast_mode, enable_sound=False)
     game = Game(resources, fast_mode)
     
     # 更新状态空间大小 (5个基础状态 + 10个陨石各3个状态 = 35)
@@ -154,6 +155,7 @@ def train_agent():
         else:
             args.episodes = 2000
     
+    # 在训练循环中不需要修改，因为reset已经优化
     for episode in range(args.episodes):
         player = game.reset()
         step = 0
