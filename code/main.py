@@ -31,7 +31,6 @@ class ResourceManager:
         if not fast_mode:
             pygame.display.set_mode((1280, 720))
         else:
-            # 最小隐藏窗口
             pygame.display.set_mode((1, 1), pygame.HIDDEN)
         if enable_sound:
             pygame.mixer.init()
@@ -48,7 +47,6 @@ class ResourceManager:
         self.load_all()
 
     def ensure_display_initialized(self):
-        """确保显示模块已初始化"""
         if not pygame.get_init() or not pygame.display.get_surface():
             ResourceManager.init_display(self.fast_mode, self.enable_sound)
 
@@ -375,40 +373,67 @@ class Player(pygame.sprite.Sprite):
             'active_lasers': len(self.game.laser_sprites) / 10.0,  # 归一化激光数量
         }
 
-        # 收集陨石信息
-        meteor_distances = []
+        # 收集陨石信息（修改后的逻辑）
+        meteor_info = []
         for meteor in self.game.meteor_sprites:
-            dist = pygame.Vector2(self.rect.center).distance_to(pygame.Vector2(meteor.rect.center))
-            rel_velocity = pygame.Vector2(meteor.direction) * meteor.speed
-            meteor_distances.append((dist, meteor, rel_velocity))
+            # 只关注在玩家上方的陨石
+            if meteor.rect.centery <= self.rect.centery:
+                dist = pygame.Vector2(self.rect.center).distance_to(pygame.Vector2(meteor.rect.center))
+                rel_velocity = pygame.Vector2(meteor.direction) * meteor.speed
+                # 计算陨石到玩家的水平距离
+                horizontal_dist = abs(meteor.rect.centerx - self.rect.centerx)
+                # 计算陨石到玩家的垂直距离
+                vertical_dist = self.rect.centery - meteor.rect.centery  # 正值表示陨石在上方
+                
+                meteor_info.append({
+                    'dist': dist,
+                    'meteor': meteor,
+                    'rel_velocity': rel_velocity,
+                    'horizontal_dist': horizontal_dist,
+                    'vertical_dist': vertical_dist
+                })
 
-        # 按距离排序，获取最近的10个陨石
-        meteor_distances.sort(key=lambda x: x[0])
-        nearest_meteors = meteor_distances[:10]
+        # 首先按垂直距离排序，优先考虑最近的威胁
+        meteor_info.sort(key=lambda x: x['vertical_dist'])
+        # 在相近垂直距离的情况下，考虑水平距离
+        nearest_meteors = meteor_info[:10]
 
-        # 填充虚拟陨石
+        # 填充虚拟陨石（如果收集到的陨石少于10个）
         while len(nearest_meteors) < 10:
-            nearest_meteors.append((float('inf'), None, pygame.Vector2()))
+            nearest_meteors.append({
+                'dist': float('inf'),
+                'meteor': None,
+                'rel_velocity': pygame.Vector2(),
+                'horizontal_dist': float('inf'),
+                'vertical_dist': float('inf')
+            })
 
-        # 添加陨石信息（包括速度和方向）
-        for i, (dist, meteor, rel_velocity) in enumerate(nearest_meteors):
-            if meteor is not None:
+        # 添加陨石信息（包括相对位置和速度）
+        for i, meteor_data in enumerate(nearest_meteors):
+            if meteor_data['meteor'] is not None:
+                meteor = meteor_data['meteor']
+                rel_velocity = meteor_data['rel_velocity']
+                
+                # 归一化位置和距离信息
                 state.update({
                     f'meteor_{i}_x': meteor.rect.centerx / self.game.WINDOW_WIDTH,
                     f'meteor_{i}_y': meteor.rect.centery / self.game.WINDOW_HEIGHT,
-                    f'meteor_{i}_dist': min(dist / self.game.WINDOW_WIDTH, 1.0),
-                    f'meteor_{i}_vx': rel_velocity.x / 500.0,  # 归一化速度
+                    f'meteor_{i}_dist': min(meteor_data['dist'] / self.game.WINDOW_WIDTH, 1.0),
+                    f'meteor_{i}_h_dist': min(meteor_data['horizontal_dist'] / self.game.WINDOW_WIDTH, 1.0),
+                    f'meteor_{i}_v_dist': min(meteor_data['vertical_dist'] / self.game.WINDOW_HEIGHT, 1.0),
+                    f'meteor_{i}_vx': rel_velocity.x / 500.0,
                     f'meteor_{i}_vy': rel_velocity.y / 500.0,
-                    f'meteor_{i}_speed': meteor.speed / 300.0,  # 归一化速度
                 })
             else:
+                # 对于虚拟陨石，使用默认值
                 state.update({
                     f'meteor_{i}_x': 1.0,
                     f'meteor_{i}_y': 0.0,
                     f'meteor_{i}_dist': 1.0,
+                    f'meteor_{i}_h_dist': 1.0,
+                    f'meteor_{i}_v_dist': 1.0,
                     f'meteor_{i}_vx': 0.0,
                     f'meteor_{i}_vy': 0.0,
-                    f'meteor_{i}_speed': 0.0,
                 })
 
         # 收集最近的3个激光信息
