@@ -19,7 +19,7 @@ def play_game():
     resources = ResourceManager(False)
     game = Game(resources, False)
     
-    agent = DQNAgent(state_size=80, action_size=len(Action))
+    agent = DQNAgent(state_size=90, action_size=len(Action))  # 更新状态空间大小
     agent.load(args.model)
     agent.epsilon = 0  # 在测试时禁用随机探索
     

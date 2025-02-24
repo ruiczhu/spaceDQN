@@ -61,7 +61,7 @@ def train_agent():
     game = Game(resources, fast_mode)
     
     # 更新为正确的状态空间大小
-    state_size = 80  # 11(基础) + 60(陨石) + 9(激光)
+    state_size = 90  # 11(基础) + 70(陨石) + 9(激光)
     agent = DQNAgent(state_size=state_size, action_size=len(Action))
     batch_size = 64
     fixed_dt = 1/50
