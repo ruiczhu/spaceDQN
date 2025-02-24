@@ -34,16 +34,16 @@ class DQNAgent:
         self.action_size = action_size
         self.memory = deque(maxlen=10000)  # 增大经验回放缓冲区
         self.gamma = 0.99
-        self.initial_epsilon = 0.9    # 降低初始探索率
+        self.initial_epsilon = 0.3    # 降低初始探索率
         self.epsilon = self.initial_epsilon
         self.epsilon_min = 0.05       # 提高最小探索率
-        self.epsilon_decay = 0.997    # 减缓衰减速度
+        self.epsilon_decay = 0.995    # 减缓衰减速度
         self.episode_count = 0        # 添加 episode 计数器
         self.learning_rate = 0.0005  # 降低学习率
         self.target_update_frequency = 10  # 每10次更新一次目标网络
         self.update_counter = 0
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.reward_scale = 0.1  # 添加奖励缩放因子
+        self.reward_scale = 1.0  # 添加奖励缩放因子
         self.batch_size = 64
         self.min_experiences = 64  # 添加最小经验数量要求
 
@@ -93,9 +93,6 @@ class DQNAgent:
         # 使用clip防止过大的loss
         loss = nn.SmoothL1Loss()(current_q_values.squeeze(), target)
         loss_value = loss.item()
-        
-        if loss_value > 100:  # 如果loss过大，跳过这次更新
-            return loss_value
 
         # 优化模型
         self.optimizer.zero_grad()
@@ -118,7 +115,7 @@ class DQNAgent:
         torch.save(self.model.state_dict(), name)
 
     def load(self, name):
-        self.model.load_state_dict(torch.load(name))
+        self.model.load_state_dict(torch.load(name, map_location=self.device))
         self.model.eval()
 
     def update_epsilon(self):
