@@ -10,7 +10,7 @@ class DQN(nn.Module):
         super(DQN, self).__init__()
         # 增加网络容量以处理更大的动作空间
         self.network = nn.Sequential(
-            nn.Linear(input_size, 512),  # 增加第一层神经元
+            nn.Linear(input_size, 512),  # 更新输入维度为90
             nn.ReLU(),
             nn.Linear(512, 256),
             nn.ReLU(),
@@ -30,7 +30,7 @@ class DQNAgent:
         # 陨石信息: 10 * 6 = 60 (每个陨石 x, y, dist, vx, vy, speed)
         # 激光信息: 3 * 3 = 9 (每个激光 x, y, dist)
         # 总计: 11 + 60 + 9 = 80
-        self.state_size = 80  # 更新为正确的状态空间大小
+        self.state_size = state_size  # 更新为正确的状态空间大小
         self.action_size = action_size
         self.memory = deque(maxlen=100000)
         self.gamma = 0.99
@@ -48,8 +48,8 @@ class DQNAgent:
         self.min_experiences = 64  # 添加最小经验数量要求
 
         # 主网络和目标网络 - 使用正确的state_size
-        self.model = DQN(self.state_size, action_size).to(self.device)
-        self.target_model = DQN(self.state_size, action_size).to(self.device)
+        self.model = DQN(state_size, action_size).to(self.device)
+        self.target_model = DQN(state_size, action_size).to(self.device)
         self.target_model.load_state_dict(self.model.state_dict())  # 初始化目标网络
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
 
