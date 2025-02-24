@@ -126,6 +126,8 @@ class Game:
         self.meteor_event = pygame.event.custom_type()
         pygame.time.set_timer(self.meteor_event, 500)
 
+        self.ai_mode = True  # 添加AI模式标志
+
     def initialize_static_background(self):
         """初始化静态背景元素，只执行一次"""
         for i in range(20):
@@ -141,6 +143,7 @@ class Game:
         self.player = Player(self.all_sprites, self.resources)
         self.player.ai_controlled = ai_controlled
         self.player.game = self
+        self.ai_mode = ai_controlled  # 更新AI模式标志
         return self.player
 
     def reset(self):
@@ -194,10 +197,10 @@ class Game:
         self.current_reward += SURVIVAL_REWARD * dt  # 根据时间步长调整奖励
         self.cumulative_reward += self.current_reward
 
-        # 检查是否达到目标奖励
-        if self.cumulative_reward >= TARGET_REWARD:
+        # 只在AI模式下检查目标奖励
+        if self.ai_mode and self.cumulative_reward >= TARGET_REWARD:
             self.target_reached = True
-            return False  # 达到目标时结束游戏
+            return False
 
         return game_continue
 
@@ -644,8 +647,9 @@ def main_game_loop():
     ResourceManager.init_display(fast_mode=False, enable_sound=True)  # 使用完整显示模式
     resources = ResourceManager(fast_mode=False, enable_sound=True)   # 加载所有资源，包括声音
 
-    # 创建游戏实例
+    # 创建游戏实例，设置为人类控制模式
     game = Game(resources, fast_mode=False)
+    game.create_player(ai_controlled=False)  # 确保设置为人类控制模式
 
     # 播放背景音乐
     if hasattr(resources, 'sounds'):
