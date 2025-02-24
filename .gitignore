@@ -1,6 +1,9 @@
 /.DS_Store
+/code/dqn2.py
 /models
 /training_data.npz.npy
 /training_plots.png
 /输出图
 /模型1
+.gitignore
+code/__pycache__

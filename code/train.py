@@ -79,7 +79,7 @@ def train_agent():
         
         if state is None:
             attempts_without_reset += 1
-            if attempts_without_reset > 3:  # 连续3次失败后重新初始化游戏
+            if attempts_without_reset > 2:  # 连续3次失败后重新初始化游戏
                 game = Game(resources, fast_mode)
                 attempts_without_reset = 0
             continue
@@ -88,7 +88,7 @@ def train_agent():
         steps_in_episode = 0
         
         # 在每个回合开始时生成多个陨石
-        for _ in range(3):
+        for _ in range(10):
             Meteor(game.resources, 
                   (randint(0, game.WINDOW_WIDTH), -100),
                   (game.all_sprites, game.meteor_sprites))
@@ -101,13 +101,13 @@ def train_agent():
                       (game.all_sprites, game.meteor_sprites))
             
             # 增加随机动作的多样性
-            if random.random() < 0.3:  # 30%的概率执行组合动作
+            if random.random() < 0.5:
                 actions = []
                 if random.random() < 0.5:
                     actions.append(random.choice([Action.LEFT, Action.RIGHT]))
                 if random.random() < 0.5:
                     actions.append(random.choice([Action.UP, Action.DOWN]))
-                if random.random() < 0.3:
+                if random.random() < 0.5:
                     actions.append(Action.SHOOT)
                 
                 for action in actions:
@@ -115,6 +115,11 @@ def train_agent():
             else:
                 action = Action(random.randrange(len(Action)))
                 player.take_action(action, fixed_dt)
+                
+            # 定期强制移动
+            if steps_in_episode % 50 == 0:
+                forced_action = random.choice([Action.LEFT, Action.RIGHT, Action.UP, Action.DOWN])
+                player.take_action(forced_action, fixed_dt)
             
             reward = game.update(fixed_dt)
             next_state = player.get_state()
@@ -155,11 +160,10 @@ def train_agent():
         game.cumulative_reward = 0
         episode_losses = []
         
-        # 移除 step < 2000 的限制，只保留生命值和目标达成检查
         while player.lives > 0 and not game.target_reached:
             dt = fixed_dt
             
-            if step % 48 == 0:
+            if step % 24 == 0:
                 Meteor(game.resources, (randint(0, game.WINDOW_WIDTH), -100), 
                       (game.all_sprites, game.meteor_sprites))
             
