@@ -19,10 +19,8 @@ def parse_args():
     return parser.parse_args()
 
 def plot_training_data(episode_rewards, losses, epsilon_values, window_size=100):
-    """绘制训练数据图表"""
     plt.figure(figsize=(15, 10))
     
-    # 绘制累积奖励
     plt.subplot(311)
     plt.plot(episode_rewards)
     plt.plot(np.convolve(episode_rewards, 
@@ -33,14 +31,12 @@ def plot_training_data(episode_rewards, losses, epsilon_values, window_size=100)
     plt.ylabel('Reward')
     plt.legend()
     
-    # 绘制损失值
     plt.subplot(312)
     plt.plot(losses)
     plt.title('Training Loss')
     plt.xlabel('Training Step')
     plt.ylabel('Loss')
     
-    # 绘制Epsilon值
     plt.subplot(313)
     plt.plot(epsilon_values)
     plt.title('Epsilon Value')
@@ -55,18 +51,15 @@ def train_agent():
     args = parse_args()
     fast_mode = not args.render
     
-    # 初始化时就确定是否需要渲染
     ResourceManager.init_display(fast_mode, enable_sound=False)
     resources = ResourceManager(fast_mode, enable_sound=False)
     game = Game(resources, fast_mode)
     
-    # 更新为正确的状态空间大小
     state_size = 90  # 11(基础) + 70(陨石) + 9(激光)
     agent = DQNAgent(state_size=state_size, action_size=len(Action))
     batch_size = 64
     fixed_dt = 1/50
     
-    # 增加预填充数量到batch_size的20倍
     min_samples = batch_size * 20
     print(f"预填充经验回放缓冲区 (目标: {min_samples} 样本)...")
     
@@ -89,20 +82,17 @@ def train_agent():
         attempts_without_reset = 0
         steps_in_episode = 0
         
-        # 在每个回合开始时生成多个陨石
         for _ in range(10):
             Meteor(game.resources, 
                   (randint(0, game.WINDOW_WIDTH), -100),
                   (game.all_sprites, game.meteor_sprites))
         
         while steps_in_episode < max_steps_per_episode and player.lives > 0:
-            # 增加陨石生成频率
             if steps_in_episode % meteor_spawn_rate == 0:
                 Meteor(game.resources, 
                       (randint(0, game.WINDOW_WIDTH), -100),
                       (game.all_sprites, game.meteor_sprites))
             
-            # 修复：先选择动作
             current_action = None
             if random.random() < 0.5:
                 actions = []
@@ -158,7 +148,6 @@ def train_agent():
         else:
             args.episodes = 2000
     
-    # 在训练循环中不需要修改，因为reset已经优化
     for episode in range(args.episodes):
         player = game.reset()
         step = 0
@@ -183,7 +172,6 @@ def train_agent():
             next_state = player.get_state()
             
             if next_state is not None:
-                # 更新完成条件：生命值为0或达到目标奖励
                 done = player.lives <= 0 or game.target_reached
                 agent.remember(state_values, action_idx, reward, 
                              list(next_state.values()), done)
@@ -222,7 +210,6 @@ def train_agent():
             
             step += 1
         
-        # 在episode结束时更新epsilon
         agent.update_epsilon()
         
         episode_rewards.append(game.cumulative_reward)

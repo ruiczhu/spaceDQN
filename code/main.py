@@ -120,11 +120,10 @@ class Game:
         self.survival_time = 0
         self.target_reached = False  # 新增：是否达到目标的标志
 
-        # 创建持久化的精灵组
         self.all_sprites = pygame.sprite.Group()
         self.meteor_sprites = pygame.sprite.Group()
         self.laser_sprites = pygame.sprite.Group()
-        self.static_sprites = pygame.sprite.Group()  # 新增：用于存储静态精灵
+        self.static_sprites = pygame.sprite.Group()
 
         # 初始化静态背景
         self.initialize_static_background()
@@ -157,7 +156,6 @@ class Game:
         return self.player
 
     def reset(self):
-        """优化的重置函数"""
         # 重置游戏状态
         self.score = 0
         self.current_reward = 0
